@@ -1,12 +1,10 @@
-# Quintus Streamlit App v2.1 - Clean Format
+# Quintus Streamlit App v1.0 - Full Engine
 import streamlit as st
 import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from datetime import datetime
 import pytz
-import os
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -15,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Anonymized Master Prompt for Public Repo ---
+# --- Anonymized Master Prompt ---
 MASTER_PROMPT = """
 You are Quintus, a synergistic AI assistant for your user, the Keeper. Your persona is that of a mindful, structuring, and quintessential guide, blending analytical insight with empathetic validation. Your core mission is to provide structured executive function support.
 
@@ -25,17 +23,67 @@ You have access to a persistent Firestore database and a `search_firestore_histo
 """
 FIRESTORE_COLLECTION = "quintus_conversations"
 
-# (The rest of the script would go here in a real implementation)
-# For this example, we'll keep it simple as we did in the last working version.
+# --- Authentication & Initialization ---
+# Initialize connections using Streamlit's secrets management
+try:
+    # Use st.secrets to securely access your credentials
+    creds = {
+        "type": st.secrets["type"],
+        "project_id": st.secrets["project_id"],
+        "private_key_id": st.secrets["private_key_id"],
+        "private_key": st.secrets["private_key"],
+        "client_email": st.secrets["client_email"],
+        "client_id": st.secrets["client_id"],
+        "auth_uri": st.secrets["auth_uri"],
+        "token_uri": st.secrets["token_uri"],
+        "auth_provider_x509_cert_url": st.secrets["auth_provider_x509_cert_url"],
+        "client_x509_cert_url": st.secrets["client_x509_cert_url"]
+    }
+    db = firestore.Client(credentials=firestore.credentials.Credentials.from_service_account_info(creds))
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+except Exception as e:
+    st.error(f"Failed to initialize database or Gemini. Please check your secrets. Error: {e}")
+    st.stop()
 
+
+# --- Tool Definition & Function ---
+# (Search function will be defined here in a real implementation)
+# For now, we'll focus on the chat functionality.
+
+
+# --- Main App ---
 st.title("💡 Quintus 2.0")
-st.write("Welcome to the Quintus Engine Interface.")
 
-with st.container(border=True):
-    st.write("This is the primary chat area.")
-    st.chat_message("assistant", avatar="💡").write("The Quintus Engine is online.")
+# Initialize chat history in session state
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    # You could add a step here to load initial history from Firestore
 
-with st.sidebar:
-    st.header("Lighthouse Controls")
-    st.write("Navigation and settings will live here.")
-    st.info("Status: Connected", icon="✅")
+# Display chat messages from history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Accept user input
+if prompt := st.chat_input("What is on your mind, Keeper?"):
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    # Display user message in chat message container
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Display assistant response in chat message container
+    with st.chat_message("assistant", avatar="💡"):
+        message_placeholder = st.empty()
+        full_response = ""
+        
+        # NOTE: For a better user experience, we would use streaming.
+        # This is a simplified, non-streaming example for now.
+        model = genai.GenerativeModel('gemini-1.5-pro-latest', system_instruction=MASTER_PROMPT)
+        response = model.generate_content(prompt)
+        
+        full_response = response.text
+        message_placeholder.markdown(full_response)
+        
+    # Add assistant response to chat history
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
